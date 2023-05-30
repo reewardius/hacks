@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -55,10 +56,12 @@ func extractHiddenParamsFromURL(url string) ([]string, error) {
 }
 
 func main() {
-	urlsFile := "urls.txt"
-	paramsFile := "params.txt"
+	urlsFile := flag.String("l", "urls.txt", "Path to the file containing URLs")
+	paramsFile := flag.String("o", "params.txt", "Path to the output file")
 
-	urls, err := ioutil.ReadFile(urlsFile)
+	flag.Parse()
+
+	urls, err := ioutil.ReadFile(*urlsFile)
 	if err != nil {
 		fmt.Printf("Failed to read URLs file: %s\n", err)
 		return
@@ -66,9 +69,9 @@ func main() {
 
 	urlList := strings.Split(string(urls), "\n")
 
-	outputFile, err := os.Create(paramsFile)
+	outputFile, err := os.OpenFile(*paramsFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		fmt.Printf("Failed to create params file: %s\n", err)
+		fmt.Printf("Failed to open params file: %s\n", err)
 		return
 	}
 	defer outputFile.Close()
@@ -98,5 +101,5 @@ func main() {
 		fmt.Fprintln(outputFile, "")
 	}
 
-	fmt.Println("Parameter extraction completed. Results are written to", paramsFile)
+	fmt.Println("Parameter extraction completed. Results are appended to", *paramsFile)
 }
