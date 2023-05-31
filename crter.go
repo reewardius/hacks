@@ -1,7 +1,8 @@
+// go run crter.go domainlist.txt myoutput.txt
+
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -12,7 +13,6 @@ import (
 )
 
 const banner = `
-
   _____ _____ _______ ______ _____  
  / ____|  __ \__   __|  ____|  __ \ 
 | |    | |__) | | |  | |__  | |__) |
@@ -21,8 +21,13 @@ const banner = `
  \_____|_|  \_\ |_|  |______|_|  \_\
                                     
 				By Micro0x00
-
 `
+
+var rePool = &sync.Pool{
+	New: func() interface{} {
+		return regexp.MustCompile(`<TD>\*\.([^<]+)</TD>`)
+	},
+}
 
 func fetchCrtShDomains(domain string, wg *sync.WaitGroup, ch chan<- []string, errCh chan<- error) {
 	defer wg.Done()
@@ -47,8 +52,9 @@ func fetchCrtShDomains(domain string, wg *sync.WaitGroup, ch chan<- []string, er
 		return
 	}
 
-	re := regexp.MustCompile(`<TD>\*\.([^<]+)</TD>`)
+	re := rePool.Get().(*regexp.Regexp)
 	matches := re.FindAllStringSubmatch(string(body), -1)
+	rePool.Put(re)
 
 	var domains []string
 	for _, match := range matches {
@@ -84,11 +90,13 @@ func main() {
 	defer outFile.Close()
 
 	writer := bufio.NewWriter(outFile)
+	defer writer.Flush()
 
 	scanner := bufio.NewScanner(file)
 	var wg sync.WaitGroup
 	ch := make(chan []string)
 	errCh := make(chan error)
+	fileLock := &sync.Mutex{}
 
 	for scanner.Scan() {
 		domain := scanner.Text()
@@ -103,10 +111,12 @@ func main() {
 	}()
 
 	for domains := range ch {
+		fileLock.Lock()
 		for _, d := range domains {
 			fmt.Println(d)
 			writer.WriteString(d + "\n")
 		}
+		fileLock.Unlock()
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -117,6 +127,4 @@ func main() {
 	for err := range errCh {
 		fmt.Printf("Error fetching domains: %v\n", err)
 	}
-
-	writer.Flush()
 }
